@@ -1,0 +1,12 @@
+{
+  "name": "lego-art-remix",
+  "private": true,
+  "scripts": {
+    "start": "serve app -l 3000",
+    "build:sw": "node build-service-worker.js"
+  },
+  "devDependencies": {
+    "serve": "^14.2.4",
+    "workbox-build": "^6.6.0"
+  }
+}

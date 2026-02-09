@@ -2,6 +2,20 @@
 
 The Intelligent, Easy to Use Lego Mosaic Maker
 
+## Avviare il progetto in locale
+
+1. Installa le dipendenze:
+   ```bash
+   npm install
+   ```
+2. Avvia il server di sviluppo (serve la cartella `app` sulla porta 3000):
+   ```bash
+   npm start
+   ```
+3. Apri il browser su [http://localhost:3000](http://localhost:3000).
+
+Il service worker (PWA) non è necessario per lo sviluppo; per generarlo: `npm run build:sw`.
+
 This project is not affiliated with The Lego Group
 
 Made with ♥ by Deb

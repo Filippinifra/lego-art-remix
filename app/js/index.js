@@ -203,7 +203,7 @@ function enableDepth() {
 
     document.getElementById("download-instructions-button").innerHTML = "Generate Color Instructions PDF";
 
-    document.getElementById("export-to-bricklink-button").innerHTML = "Copy Pixels Bricklink XML to Clipboard";
+    document.getElementById("export-to-bricklink-button").innerHTML = "Copy piece list (JSON) to Clipboard";
 
     onDepthMapCountChange();
 
@@ -381,9 +381,9 @@ document.getElementById("color-tie-grouping-factor-slider").addEventListener("ch
     runStep4();
 });
 
-let DEFAULT_STUD_MAP = "all_tile_colors";
-let DEFAULT_COLOR = "#42c0fb";
-let DEFAULT_COLOR_NAME = "Medium Azure";
+let DEFAULT_STUD_MAP = "pick_a_brick";
+let DEFAULT_COLOR = PICK_A_BRICK_PIECES[0].pieceColor;
+let DEFAULT_COLOR_NAME = PICK_A_BRICK_PIECES[0].title;
 
 try {
     const match = window.location.href.match("[?&]" + "availableColors" + "=([^&]+)");
@@ -402,14 +402,8 @@ try {
         DEFAULT_COLOR = availableColors[0];
         DEFAULT_COLOR_NAME = availableColors[0];
         ALL_VALID_BRICKLINK_COLORS = availableColors
-            .map((color) => {
-                return {
-                    name: color,
-                    hex: color,
-                };
-            })
+            .map((color) => ({ name: color, hex: color }))
             .concat(ALL_VALID_BRICKLINK_COLORS);
-        ALL_BRICKLINK_SOLID_COLORS = ALL_VALID_BRICKLINK_COLORS;
         const studMap = {};
         availableColors.forEach((color) => {
             studMap[color] = 99999;
@@ -421,7 +415,7 @@ try {
                 sortedStuds: availableColors,
                 studMap: studMap,
             },
-            all_solid_colors: STUD_MAPS["all_solid_colors"],
+            pick_a_brick: STUD_MAPS["pick_a_brick"],
         };
         DEFAULT_STUD_MAP = "url_colors";
         document.getElementById("bricklink-export-card").hidden = true;
@@ -516,7 +510,7 @@ PIXEL_TYPE_OPTIONS.forEach((part) => {
 });
 
 function isBleedthroughEnabled() {
-    return [PIXEL_TYPE_OPTIONS[0].number, PIXEL_TYPE_OPTIONS[1].number].includes(selectedPixelPartNumber);
+    return PIXEL_TYPE_OPTIONS.some((opt) => opt && opt.number === selectedPixelPartNumber);
 }
 
 let selectedTiebreakTechnique = "alternatingmod";
@@ -756,10 +750,6 @@ Object.keys(quantizationAlgorithmsInfo).forEach((key) => {
 
 const DIVIDER = "DIVIDER";
 const STUD_MAP_KEYS = Object.keys(STUD_MAPS);
-const NUM_SET_STUD_MAPS = 12;
-const NUM_PARTIAL_SET_STUD_MAPS = 7;
-STUD_MAP_KEYS.splice(NUM_SET_STUD_MAPS, 0, DIVIDER);
-STUD_MAP_KEYS.splice(NUM_SET_STUD_MAPS + NUM_PARTIAL_SET_STUD_MAPS + 1, 0, DIVIDER);
 
 STUD_MAP_KEYS.filter((key) => key !== "rgb").forEach((studMap) => {
     if (studMap === DIVIDER) {
@@ -1684,7 +1674,8 @@ Array.from(document.getElementById("paintbrush-tool-selection-dropdown-options")
     const value = item.id;
     item.addEventListener("click", () => {
         selectedPaintbrushTool = value;
-        document.getElementById("paintbrush-color-dropdown").disabled = value !== "paintbrush-tool-dropdown-option";
+        document.getElementById("paintbrush-color-dropdown").disabled =
+            value !== "paintbrush-tool-dropdown-option" && value !== "fill-tool-dropdown-option";
         document.getElementById("paintbrush-tool-selection-dropdown").innerHTML = item.children[0].innerHTML;
     });
 });
@@ -1717,17 +1708,94 @@ function onMouseMoveOverStep3Canvas(event) {
 
         if (selectedPaintbrushTool === "paintbrush-tool-dropdown-option") {
             const colorRGB = hexToRgb(activePaintbrushHex);
-            // we want to paint - update the override pixel array
-            // do stuff directly on the canvas for perf
             ctx.beginPath();
             ctx.arc(((i % width) * 2 + 1) * radius, (Math.floor(i / width) * 2 + 1) * radius, radius, 0, 2 * Math.PI);
             ctx.fillStyle = activePaintbrushHex;
             ctx.fill();
 
-            // update the override pixel array in place
             overridePixelArray[pixelIndex] = colorRGB[0];
             overridePixelArray[pixelIndex + 1] = colorRGB[1];
             overridePixelArray[pixelIndex + 2] = colorRGB[2];
+        } else if (selectedPaintbrushTool === "fill-tool-dropdown-option") {
+            const fillRGB = hexToRgb(activePaintbrushHex);
+            const baseR = step3CanvasPixelsForHover[pixelIndex];
+            const baseG = step3CanvasPixelsForHover[pixelIndex + 1];
+            const baseB = step3CanvasPixelsForHover[pixelIndex + 2];
+            const currentR = overridePixelArray[pixelIndex] != null ? overridePixelArray[pixelIndex] : baseR;
+            const currentG = overridePixelArray[pixelIndex + 1] != null ? overridePixelArray[pixelIndex + 1] : baseG;
+            const currentB = overridePixelArray[pixelIndex + 2] != null ? overridePixelArray[pixelIndex + 2] : baseB;
+            const targetHex = rgbToHex(currentR, currentG, currentB);
+            if (targetHex === activePaintbrushHex) return;
+
+            const height = targetResolution[1];
+            const queue = [[row, col]];
+            const visited = new Set();
+            visited.add(row * width + col);
+            const toFill = [];
+
+            while (queue.length > 0) {
+                const [r, c] = queue.shift();
+                toFill.push([r, c]);
+                for (const [dr, dc] of [
+                    [0, 1],
+                    [0, -1],
+                    [1, 0],
+                    [-1, 0],
+                ]) {
+                    const nr = r + dr;
+                    const nc = c + dc;
+                    if (nr < 0 || nr >= height || nc < 0 || nc >= width) continue;
+                    const key = nr * width + nc;
+                    if (visited.has(key)) continue;
+                    const idx = key * 4;
+                    const nrR =
+                        overridePixelArray[idx] != null ? overridePixelArray[idx] : step3CanvasPixelsForHover[idx];
+                    const nrG =
+                        overridePixelArray[idx + 1] != null
+                            ? overridePixelArray[idx + 1]
+                            : step3CanvasPixelsForHover[idx + 1];
+                    const nrB =
+                        overridePixelArray[idx + 2] != null
+                            ? overridePixelArray[idx + 2]
+                            : step3CanvasPixelsForHover[idx + 2];
+                    const neighborHex = rgbToHex(nrR, nrG, nrB);
+                    if (neighborHex !== targetHex) continue;
+                    visited.add(key);
+                    queue.push([nr, nc]);
+                }
+            }
+
+            toFill.forEach(([r, c]) => {
+                const idx = 4 * (r * width + c);
+                overridePixelArray[idx] = fillRGB[0];
+                overridePixelArray[idx + 1] = fillRGB[1];
+                overridePixelArray[idx + 2] = fillRGB[2];
+            });
+
+            const mergedPixelArray = new Array(step3CanvasPixelsForHover.length);
+            for (let k = 0; k < mergedPixelArray.length / 4; k++) {
+                mergedPixelArray[k * 4] =
+                    overridePixelArray[k * 4] != null ? overridePixelArray[k * 4] : step3CanvasPixelsForHover[k * 4];
+                mergedPixelArray[k * 4 + 1] =
+                    overridePixelArray[k * 4 + 1] != null
+                        ? overridePixelArray[k * 4 + 1]
+                        : step3CanvasPixelsForHover[k * 4 + 1];
+                mergedPixelArray[k * 4 + 2] =
+                    overridePixelArray[k * 4 + 2] != null
+                        ? overridePixelArray[k * 4 + 2]
+                        : step3CanvasPixelsForHover[k * 4 + 2];
+                mergedPixelArray[k * 4 + 3] = 255;
+            }
+            drawPixelsOnCanvas(mergedPixelArray, step3Canvas);
+            drawStudImageOnCanvas(
+                mergedPixelArray,
+                width,
+                SCALING_FACTOR,
+                step3CanvasUpscaled,
+                selectedPixelPartNumber,
+                step3VariablePixelPieceDimensions
+            );
+            activePaintbrushHex = null;
         } else if (selectedPaintbrushTool === "eraser-tool-dropdown-option") {
             // null out the override
             if (
@@ -2693,19 +2761,14 @@ document.getElementById("download-depth-instructions-button").addEventListener("
 
 document.getElementById("export-to-bricklink-button").addEventListener("click", () => {
     disableInteraction();
+    const sourceCanvas =
+        step4Canvas.width === targetResolution[0] && step4Canvas.height === targetResolution[1]
+            ? step4Canvas
+            : bricklinkCacheCanvas;
+    const studMap = getUsedPixelsStudMap(getPixelArrayFromCanvas(sourceCanvas));
+    const list = getPickABrickListJSON(studMap);
     navigator.clipboard
-        .writeText(
-            ("" + selectedPixelPartNumber).match("^variable.*$")
-                ? getVariablePixelWantedListXML(
-                      convertPixelArrayToMatrix(getPixelArrayFromCanvas(bricklinkCacheCanvas), targetResolution[0]),
-                      step3VariablePixelPieceDimensions,
-                      selectedPixelPartNumber
-                  )
-                : getWantedListXML(
-                      getUsedPixelsStudMap(getPixelArrayFromCanvas(bricklinkCacheCanvas)),
-                      selectedPixelPartNumber
-                  )
-        )
+        .writeText(JSON.stringify(list))
         .then(
             function () {
                 enableInteraction();

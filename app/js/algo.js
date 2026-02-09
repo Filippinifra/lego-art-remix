@@ -869,32 +869,25 @@ function revertDarkenedImage(pixels, darkenedStudsToStuds) {
     return outputPixels;
 }
 
+const ROUND_PIECE_NUMBERS = [98138, 4073];
+
 function drawPixel(ctx, x, y, radius, pixelHex, strokeHex, pixelType) {
+    const circleDrawnAsStud = [1, 3, 4, 6, 7]
+        .map((i) => PIXEL_TYPE_OPTIONS[i]?.number)
+        .filter((n) => n != null);
     ctx.beginPath();
-    if ([PIXEL_TYPE_OPTIONS[0].number, PIXEL_TYPE_OPTIONS[1].number].includes(pixelType)) {
-        // draw a circle
+    if (ROUND_PIECE_NUMBERS.includes(pixelType)) {
         ctx.arc(x + radius, y + radius, radius, 0, 2 * Math.PI);
     } else {
-        // draw a square
         ctx.rect(x, y, 2 * radius, 2 * radius);
     }
     ctx.fillStyle = pixelHex;
     ctx.fill();
     ctx.strokeStyle = strokeHex;
     if (!("" + pixelType).match("^variable.*$")) {
-        // TODO: Look at perf?
         ctx.stroke();
     }
-    if (
-        [
-            PIXEL_TYPE_OPTIONS[1].number,
-            PIXEL_TYPE_OPTIONS[3].number,
-            PIXEL_TYPE_OPTIONS[4].number,
-            PIXEL_TYPE_OPTIONS[6].number,
-            PIXEL_TYPE_OPTIONS[7].number,
-        ].includes(pixelType)
-    ) {
-        // draw a circle on top of the piece to represent a stud
+    if (circleDrawnAsStud.includes(pixelType)) {
         ctx.beginPath();
         ctx.arc(x + radius, y + radius, radius * 0.6, 0, 2 * Math.PI);
         ctx.stroke();
@@ -1002,7 +995,11 @@ function drawStudCountForContext(
             ctx.fillText(`X ${studMap[pixelHex] || 0}`, x + radius * 1.5, y);
         }
         ctx.font = `${scalingFactor / 2.5}px Arial`;
-        ctx.fillText(HEX_TO_COLOR_NAME[pixelHex] || pixelHex, x + radius * 1.5, y + scalingFactor / 2.5);
+        ctx.fillText(
+            HEX_TO_COLOR_NAME[getNearestPaletteHex(pixelHex)] || pixelHex,
+            x + radius * 1.5,
+            y + scalingFactor / 2.5
+        );
         ctx.font = `${scalingFactor / 2}px Arial`;
     });
 
@@ -1148,6 +1145,22 @@ function generateInstructionPage(
         studToNumber[stud] = i + 1;
     });
 
+    function nearestHexInList(hex, list) {
+        if (list.includes(hex)) return hex;
+        const rgb = hexToRgb(hex);
+        let best = list[0];
+        let bestD = 1e9;
+        for (const p of list) {
+            const prgb = hexToRgb(p);
+            const d = (rgb[0] - prgb[0]) ** 2 + (rgb[1] - prgb[1]) ** 2 + (rgb[2] - prgb[2]) ** 2;
+            if (d < bestD) {
+                bestD = d;
+                best = p;
+            }
+        }
+        return best;
+    }
+
     ctx.font = `${scalingFactor / 2}px Arial`;
 
     for (let i = 0; i < plateWidth; i++) {
@@ -1158,6 +1171,7 @@ function generateInstructionPage(
                 pixelArray[pixelIndex * 4 + 1],
                 pixelArray[pixelIndex * 4 + 2]
             );
+            const displayHex = nearestHexInList(pixelHex, availableStudHexList);
             ctx.beginPath();
             const x = pictureWidth * 0.75 + (j * 2 + 1) * radius;
             const y = pictureHeight * 0.2 + ((i % plateWidth) * 2 + 1) * radius;
@@ -1171,11 +1185,14 @@ function generateInstructionPage(
                 PIXEL_TYPE_TO_FLATTENED[pixelType]
             );
             ctx.fillStyle = inverseHex(pixelHex);
-            ctx.fillText(
-                studToNumber[pixelHex],
-                x - (scalingFactor * (1 + Math.floor(studToNumber[pixelHex] / 2) / 6)) / 8,
-                y + scalingFactor / 8
-            );
+            const num = studToNumber[displayHex];
+            if (num != null) {
+                ctx.fillText(
+                    num,
+                    x - (scalingFactor * (1 + Math.floor(num / 2) / 6)) / 8,
+                    y + scalingFactor / 8
+                );
+            }
         }
     }
 
@@ -1785,6 +1802,39 @@ function getWantedListXML(studMap, partID) {
   <INVENTORY>
     \n${items.join("\n")}\n
   </INVENTORY>`;
+}
+
+function getNearestPaletteHex(hex) {
+    const palette = Object.keys(HEX_TO_PIECE_ID);
+    if (palette.length === 0) return hex;
+    const rgb = hexToRgb(hex);
+    let best = palette[0];
+    let bestD = 1e9;
+    for (const p of palette) {
+        const prgb = hexToRgb(p);
+        const d = (rgb[0] - prgb[0]) ** 2 + (rgb[1] - prgb[1]) ** 2 + (rgb[2] - prgb[2]) ** 2;
+        if (d < bestD) {
+            bestD = d;
+            best = p;
+        }
+    }
+    return best;
+}
+
+function getPickABrickListJSON(studMap) {
+    const merged = {};
+    Object.keys(studMap).forEach((hex) => {
+        const qty = studMap[hex] || 0;
+        if (qty <= 0) return;
+        const paletteHex = getNearestPaletteHex(hex);
+        if (HEX_TO_PIECE_ID[paletteHex] != null) {
+            merged[paletteHex] = (merged[paletteHex] || 0) + qty;
+        }
+    });
+    return Object.keys(merged).map((hex) => ({
+        elementId: String(HEX_TO_PIECE_ID[hex]),
+        quantity: merged[hex],
+    }));
 }
 
 function getVariablePixelWantedListXML(pixelColorMatrix, variablePixelPieceDimensions, pixelType) {

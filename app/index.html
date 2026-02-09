@@ -1068,6 +1068,15 @@
                         </span>
                         Eraser
                       </a>
+                      <a class="dropdown-item btn" id="fill-tool-dropdown-option">
+                        <span>
+                          <svg width="16" height="16" fill="currentColor" class="bi bi-paint-bucket" viewBox="0 0 16 16">
+                            <path d="M6.012 5.12c0-.664.508-1.248 1.314-1.248.701 0 1.301.372 1.301.968 0 .636-.394 1.152-1.065 1.152-.56 0-.964-.444-.992-.776h-.268zm.091 2.429c0-.582.208-.987.604-.987.406 0 .657.405.657 1.016 0 .69-.333 1.211-.871 1.211-.494 0-.787-.354-.787-.99z"/>
+                            <path d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708 0l-1.5 1.5A.5.5 0 0 0 10.5 6.5v3.793l-8.146 8.147a.5.5 0 0 0 .708.708l8-8V6.5a.5.5 0 0 0 .146.354l1.5 1.5z"/>
+                          </svg>
+                        </span>
+                        Riempi
+                      </a>
                       <a class="dropdown-item btn" id="dropdown-tool-dropdown-option">
                         <span>
                           <svg width="16" height="16" fill="currentColor" class="bi bi-pencil-fill" viewBox="0 0 16 16">
@@ -1167,7 +1176,7 @@
                               &#9679; This section specifies how many pieces of each color you have available to create
                               the image
                             </p>
-                            <p style="margin-left: 4px; margin-bottom: 8px">&#9679; Color names are bricklink colors</p>
+                            <p style="margin-left: 4px; margin-bottom: 8px">&#9679; Color names are Pick a Brick colors</p>
                             <p style="margin-left: 4px; margin-bottom: 8px">
                               &#9679; Step 4 of the algorithm cannot run unless you select enough pieces to fill the
                               picture ('Missing Pieces' must be 0)
@@ -1297,7 +1306,7 @@
                             aria-haspopup="true"
                             aria-expanded="false"
                           >
-                            Bricklink Pixel Piece
+                            Pixel piece
                           </button>
                           <div
                             class="dropdown-menu"
@@ -1649,22 +1658,17 @@
                         class="btn btn-info"
                         style="margin-bottom: 10px; margin-top: 8px"
                       >
-                        Copy Bricklink XML to Clipboard
+                        Copy piece list (JSON) to Clipboard
                       </button>
                       <br />
                       <small>
                         <p style="margin-left: 4px; margin-bottom: 4px">
-                          The type of piece used depends on 'Pixel Piece' under step 3
+                          Format: [{"elementId":"...","quantity":n}, ...] (Pick a Brick piece IDs)
                         </p>
                         <p style="margin-left: 4px; margin-bottom: 4px">Frame elements are not exported</p>
-                        <p style="margin-left: 4px; margin-bottom: 4px">
-                          <a href="https://www.bricklink.com/v2/wanted/upload.page" target="_blank">
-                            Bricklink Upload Page
-                          </a>
-                        </p>
                         <p style="margin-left: 4px">
                           <a href="https://www.lego.com/en-us/page/static/pick-a-brick" target="_blank">
-                            U.S. Pick a Brick Page
+                            Lego Pick a Brick
                           </a>
                         </p>
                       </small>
@@ -1720,7 +1724,7 @@
                         <p style="margin-left: 4px; margin-bottom: 4px">
                           Longer instructions may be split into multiple files
                         </p>
-                        <p style="margin-left: 4px; margin-bottom: 4px">Color names are Bricklink colors</p>
+                        <p style="margin-left: 4px; margin-bottom: 4px">Color names are Pick a Brick colors</p>
                       </small>
                       <div style="margin-left: 4px; margin-bottom: 4px">
                         <small>
@@ -2349,7 +2353,9 @@
             console.log("Service worker registration successful, scope is:", registration.scope);
           })
           .catch(function (error) {
-            console.error("Service worker registration failed, error:", error);
+            if (error.message && !error.message.includes("404")) {
+              console.error("Service worker registration failed, error:", error);
+            }
           });
       }
     </script>
